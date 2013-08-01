@@ -208,7 +208,7 @@ classdef ImageSeriesObject < dynamicprops
             end
         end
         function varargout = plot(obj,xProp,yProp,varargin)
-            p=InputParser;
+            p=inputParser;
             addRequired(p,'xProp',@ischar);
             addRequired(p,'yProp',@ischar);
             addOptional(p,'supressfigure',false,@islogical);
@@ -251,7 +251,7 @@ classdef ImageSeriesObject < dynamicprops
             end
         end
         function varargout = ploterr(obj,xProp,yProp,varargin)
-            p=InputParser;
+            p=inputParser;
             addRequired(p,'xProp',@ischar);
             addRequired(p,'yProp',@ischar);
             addOptional(p,'supressfigure',false,@islogical);

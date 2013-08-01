@@ -64,12 +64,12 @@ methods
         hold on
         
         colors={...
-            [0;25;205]/255.,...   %"Jesse Blue" <<the #1 Color!!!
+            [0;25;205]/255.,...   %"Royal Jesse Blue" <<the #1 Color!!!
             [205;38;38]/255.,...  %"Ivana Red"
             [67;205;128]/255.,... %"Yichao Green"
-            [250;128;114]/255.,...%"Colin Salmon"
+            [250;128;114]/255.,...%"Colin 'Crew-Neck' Salmon"
             [137;104;205]/255.,...%"Niki Lavender"
-            [85;107;47]/255.,...  %"Will's Magical Olive"
+            [85;107;47]/255.,...  %"Will's Magical Dark Olive"
             };
         
         for i=1:length(obj.seriesHandles)

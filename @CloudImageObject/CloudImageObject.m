@@ -58,6 +58,7 @@ classdef CloudImageObject < AbsorptionImageObject
                     filename=[filename ext];                    
                 else
                     %file not aia
+                    error('file not .aia')
                 end
            end
            currentObjects = CloudImageObject.findall();
@@ -170,6 +171,8 @@ classdef CloudImageObject < AbsorptionImageObject
            hh=figure; 
            subplot(3,3,[4 5 7 8]);
            imagesc(opticalDensity);
+           blu=transpose([1:-1/255:0;1:-1/255:0;ones(1,256)]);
+           colormap(blu)
            set(gca,'XTick',1:(length(opticalDensity(1,:))-1)/2:(length(opticalDensity(1,:)-1)))
            set(gca,'XTickLabel',{'-s/2','0','s/2'})
            set(gca,'YTick',1:(length(opticalDensity(:,1))-1)/2:(length(opticalDensity(:,1)-1)))
