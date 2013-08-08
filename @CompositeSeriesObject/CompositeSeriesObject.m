@@ -37,7 +37,7 @@ methods
                 obj.seriesHandles{1}.(obj.sortParameter)=currentparam;
                 propMeta.SetAccess = 'protected';
             else
-                if ~any(params(params==storage.imageHandles{i}.(obj.sortParameter)))
+                if ~any(params==storage.imageHandles{i}.(obj.sortParameter))
                     %this is the first one with this param
                     params(length(params)+1)=currentparam;
                     if strcmp(obj.SERIESCLASS,'ImageSeriesObject')
