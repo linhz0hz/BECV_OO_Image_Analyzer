@@ -56,7 +56,8 @@ methods
             end  
         end
         
-%         obj.seriesHandles = sort(obj.seriesHandles,)
+         [~,sortIndex] = sort(params);
+         obj.seriesHandles = obj.seriesHandles(sortIndex);
         
     end
     function varargout =  parameterizedPlot(obj,xProp,yProp)
@@ -71,13 +72,14 @@ methods
             [137;104;205]/255.,...%"Niki Lavender"
             [85;107;47]/255.,...  %"Will's Magical Dark Olive"
             };
-        
+
         for i=1:length(obj.seriesHandles)
+            mod(i,length(colors))
             style = {...
                 'o',...
-                'Color',colors{mod(i,length(colors))},...
+                'Color',colors{mod(i-1,length(colors))+1},...
                 'MarkerSize',4.5,...
-                'MarkerFaceColor',colors{mod(i,length(colors))},...
+                'MarkerFaceColor',colors{mod(i-1,length(colors))+1},...
                 'MarkerEdgeColor','k'};
             obj.seriesHandles{i}.ploterr(xProp,yProp,'supressfigure',true,'styleoptions',style);
         end
@@ -87,7 +89,8 @@ methods
         for i=1:length(obj.seriesHandles)
             leg{i}=num2str(obj.seriesHandles{i}.(obj.sortParameter));
         end
-        legend(leg);
+        legHandle = legend(leg);
+        set(get(legHandle, 'title'),'string',obj.sortParameter);
         varargout{1}=h;
     end
 end
