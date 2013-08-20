@@ -4,8 +4,8 @@ classdef CloudImageObject < AbsorptionImageObject
         nX%Integrated area of Gaussian fit in x projection
         nY%Integrated area of Gaussian fit in y projection
         photonsPerAtom %Number of photon counts registered by the CCD per atom per pixel
-        xGaussianFit %Fit objected containing Gaussian fit in x projection
-        yGaussianFit %Fit object containing Gaussian fit in y projection
+        xFit %Fit objected containing Gaussian fit in x projection
+        yFit %Fit object containing Gaussian fit in y projection
    end
    properties(Dependent)
        xProjection %
@@ -24,6 +24,7 @@ classdef CloudImageObject < AbsorptionImageObject
        phaseSpaceDensity %
        averageDensity %
        peakDensity %
+       aspectRatio %
    end
    methods
        function obj = CloudImageObject(varargin)
@@ -36,6 +37,7 @@ classdef CloudImageObject < AbsorptionImageObject
            addOptional(p,'resetROI',true,@islogical);
            addOptional(p,'imagingDetuning',0,@isnumeric);
            addOptional(p,'last',false,@islogical);
+           
            parse(p,varargin{:});
            magnification = p.Results.magnification;
            file = p.Results.file;
@@ -83,9 +85,9 @@ classdef CloudImageObject < AbsorptionImageObject
            if objAlreadyExists    
                 obj=currentObjects{objIndex};
            else
-                obj.xGaussianFit=CloudImageObject.fitOffsetGaussian(...
+                obj.xFit=CloudImageObject.fitOffsetGaussian(...
                     obj.regionOfInterest.x,obj.xProjection,'offset',fitOffset);
-                obj.yGaussianFit=CloudImageObject.fitOffsetGaussian(...
+                obj.yFit=CloudImageObject.fitOffsetGaussian(...
                     obj.regionOfInterest.y,obj.yProjection,'offset',fitOffset);
                 setNumberOfAtoms(obj);
                 setPhotonsPerAtom(obj);           
@@ -99,18 +101,18 @@ classdef CloudImageObject < AbsorptionImageObject
        end
        function avOD = get.avOD(obj) 
        
-           avODRangeX=max(round(obj.xGaussianFit.b-obj.xGaussianFit.c),1):...
-               min(round(obj.xGaussianFit.b+obj.xGaussianFit.c),obj.xCoordinates(end));
-           avODRangeY=max(round(obj.yGaussianFit.b-obj.yGaussianFit.c),1):...
-               min(round(obj.yGaussianFit.b+obj.yGaussianFit.c),obj.yCoordinates(end));           
+           avODRangeX=max(round(obj.xFit.b-obj.xFit.c),1):...
+               min(round(obj.xFit.b+obj.xFit.c),obj.xCoordinates(end));
+           avODRangeY=max(round(obj.yFit.b-obj.yFit.c),1):...
+               min(round(obj.yFit.b+obj.yFit.c),obj.yCoordinates(end));           
            avOD=sum(sum(obj.opticalDensity(avODRangeY,avODRangeX)))...
                /(length(avODRangeX)*length(avODRangeY));           
        end
        function peakOD = get.peakOD(obj)
-           avODRangeX=max(round(obj.xGaussianFit.b-obj.xGaussianFit.c),1):...
-               min(round(obj.xGaussianFit.b+obj.xGaussianFit.c),obj.xCoordinates(end));
-           avODRangeY=max(round(obj.yGaussianFit.b-obj.yGaussianFit.c),1):...
-               min(round(obj.yGaussianFit.b+obj.yGaussianFit.c),obj.yCoordinates(end));           
+           avODRangeX=max(round(obj.xFit.b-obj.xFit.c),1):...
+               min(round(obj.xFit.b+obj.xFit.c),obj.xCoordinates(end));
+           avODRangeY=max(round(obj.yFit.b-obj.yFit.c),1):...
+               min(round(obj.yFit.b+obj.yFit.c),obj.yCoordinates(end));           
            peakOD=max(max(obj.opticalDensity(avODRangeY,avODRangeX)));
        end
        function phaseSpaceDensity = get.phaseSpaceDensity(obj)
@@ -120,10 +122,10 @@ classdef CloudImageObject < AbsorptionImageObject
            averageDensity = obj.nC / (obj.xMetricWidth^2 * obj.yMetricWidth) * 10^-6 / 4 / pi * 3*0.397496;
        end
        function peakDensity = get.peakDensity(obj)
-           avODRangeX=max(round(obj.xGaussianFit.b-obj.xGaussianFit.c),1):...
-               min(round(obj.xGaussianFit.b+obj.xGaussianFit.c),obj.xCoordinates(end));
-           avODRangeY=max(round(obj.yGaussianFit.b-obj.yGaussianFit.c),1):...
-               min(round(obj.yGaussianFit.b+obj.yGaussianFit.c),obj.yCoordinates(end));
+           avODRangeX=max(round(obj.xFit.b-obj.xFit.c),1):...
+               min(round(obj.xFit.b+obj.xFit.c),obj.xCoordinates(end));
+           avODRangeY=max(round(obj.yFit.b-obj.yFit.c),1):...
+               min(round(obj.yFit.b+obj.yFit.c),obj.yCoordinates(end));
            nToAverage = max([round(length(avODRangeX)*length(avODRangeY)*.001) 5]);
            orderedDensities = sort(reshape(obj.opticalDensity(avODRangeY,avODRangeX),[],1),'descend');
            peakDensity = 1/obj.SCATTERING_XS*...
@@ -136,10 +138,10 @@ classdef CloudImageObject < AbsorptionImageObject
            yProjection = sum(obj.opticalDensity(obj.regionOfInterest.y,obj.regionOfInterest.x),2)';
        end
        function xWidth = get.xWidth(obj)
-           xWidth = obj.xGaussianFit.c;
+           xWidth = min(obj.xFit.c,280);
        end
        function yWidth = get.yWidth(obj)
-           yWidth = obj.yGaussianFit.c;
+           yWidth = min(obj.yFit.c,280);
        end
        function xMetricWidth = get.xMetricWidth(obj)
            xMetricWidth=obj.xWidth*obj.PIXEL_SIZE/obj.MAGNIFICATION;
@@ -148,27 +150,34 @@ classdef CloudImageObject < AbsorptionImageObject
            yMetricWidth=obj.yWidth*obj.PIXEL_SIZE/obj.MAGNIFICATION;
        end
        function xPeakHeight= get.xPeakHeight(obj)
-           xPeakHeight = obj.xGaussianFit.a;
+           xPeakHeight = obj.xFit.a;
        end
        function yPeakHeight= get.yPeakHeight(obj)
-           yPeakHeight = obj.yGaussianFit.a;
+           yPeakHeight = obj.yFit.a;
        end
        function xPeakLocation= get.xPeakLocation(obj)
-           xPeakLocation = obj.xGaussianFit.b;
+           xPeakLocation = obj.xFit.b;
        end
        function yPeakLocation= get.yPeakLocation(obj)
-           yPeakLocation = obj.yGaussianFit.b;
+           yPeakLocation = obj.yFit.b;
        end
-       function set.xGaussianFit(obj,val)
-           obj.xGaussianFit=val;
+       function aspectRatio = get.aspectRatio(obj)
+           aspectRatio = obj.xWidth/obj.yWidth;
        end
-       function set.yGaussianFit(obj,val)
-           obj.yGaussianFit=val;
+       function set.xFit(obj,val)
+           obj.xFit=val;
        end
-       function h = show(obj)
+       function set.yFit(obj,val)
+           obj.yFit=val;
+       end
+       function h = show(obj,varargin)
            opticalDensity=obj.opticalDensity(obj.regionOfInterest.y,obj.regionOfInterest.x);
            opticalDensity(opticalDensity<0)=0;
-           hh=figure; 
+           if nargin>1
+               hh=figure(varargin{1});
+           else
+               hh=figure;
+           end
            subplot(3,3,[4 5 7 8]);
            imagesc(opticalDensity);
            blu=transpose([1:-1/255:0;1:-1/255:0;ones(1,256)]);
@@ -179,12 +188,12 @@ classdef CloudImageObject < AbsorptionImageObject
            set(gca,'YTickLabel',{'-s','0','s/2'})
            
            subplot(3,3,[1 2])
-           plot(obj.xGaussianFit,'--r',obj.regionOfInterest.x,obj.xProjection,'b');
+           plot(obj.xFit,'--r',obj.regionOfInterest.x,obj.xProjection,'b');
            axis tight
            xlabel(''),ylabel(''),legend('off')
            
            subplot(3,3,[6 9]);
-           plot(obj.yGaussianFit,'--r',obj.regionOfInterest.y,obj.yProjection,'b');
+           plot(obj.yFit,'--r',obj.regionOfInterest.y,obj.yProjection,'b');
            xlabel(''),ylabel(''),legend('off')
            view(90,90);
            axis tight
@@ -212,8 +221,8 @@ classdef CloudImageObject < AbsorptionImageObject
            hold on
            plot(obj.regionOfInterest.x,obj.xProjection,'b');
            plot(obj.regionOfInterest.y,obj.yProjection,'g');
-           plot(obj.xGaussianFit,'--r');
-           plot(obj.yGaussianFit,'--r');
+           plot(obj.xFit,'--r');
+           plot(obj.yFit,'--r');
            legend('X projection', 'Y projection');
            xlabel('pixel')
            ylabel('projected OD')
@@ -225,9 +234,9 @@ classdef CloudImageObject < AbsorptionImageObject
    end
    methods (Access = protected, Hidden = true)
        function setNumberOfAtoms(obj)
-           nX=abs(sqrt(2*pi)*obj.xGaussianFit.a*obj.xGaussianFit.c*...
+           nX=abs(sqrt(2*pi)*obj.xFit.a*obj.xFit.c*...
                (obj.PIXEL_SIZE/obj.MAGNIFICATION)^2/obj.SCATTERING_XS);
-           nY=abs(sqrt(2*pi)*obj.yGaussianFit.a*obj.yGaussianFit.c*...
+           nY=abs(sqrt(2*pi)*obj.yFit.a*obj.yFit.c*...
                (obj.PIXEL_SIZE/obj.MAGNIFICATION)^2/obj.SCATTERING_XS);
            nC=(obj.PIXEL_SIZE/obj.MAGNIFICATION)^2/obj.SCATTERING_XS*...
                 sum(sum(obj.opticalDensity(obj.regionOfInterest.y,obj.regionOfInterest.x)));
@@ -236,10 +245,10 @@ classdef CloudImageObject < AbsorptionImageObject
            obj.nY=nY;
        end
        function setPhotonsPerAtom(obj)
-           ppaRangeX=max(round(obj.xGaussianFit.b-obj.xGaussianFit.c),1):...
-               min(round(obj.xGaussianFit.b+obj.xGaussianFit.c),obj.xCoordinates(end));
-           ppaRangeY=max(round(obj.yGaussianFit.b-obj.yGaussianFit.c),1):...
-               min(round(obj.yGaussianFit.b+obj.yGaussianFit.c),obj.yCoordinates(end));
+           ppaRangeX=max(round(obj.xFit.b-obj.xFit.c),1):...
+               min(round(obj.xFit.b+obj.xFit.c),obj.xCoordinates(end));
+           ppaRangeY=max(round(obj.yFit.b-obj.yFit.c),1):...
+               min(round(obj.yFit.b+obj.yFit.c),obj.yCoordinates(end));
            adjustedOpticalDensity=obj.opticalDensity;
            adjustedOpticalDensity(adjustedOpticalDensity==0)=1;
            obj.photonsPerAtom=abs(obj.light(ppaRangeY,ppaRangeX)./...
