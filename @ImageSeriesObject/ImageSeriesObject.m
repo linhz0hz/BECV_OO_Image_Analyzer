@@ -119,7 +119,7 @@ classdef ImageSeriesObject < dynamicprops
                 figureTitle='filename';
             end
             for i=1:numberOfImages
-                images{i}=imlist{i}.thumbnail;
+                images{i}=imlist{i}.opticalDensity;
             end
             h = figure('name',figureTitle);
             text(.25,1.25,figureTitle)
@@ -129,7 +129,7 @@ classdef ImageSeriesObject < dynamicprops
             rows=ceil(numberOfImages/columns);
             for i=1:numberOfImages
                 subplot(rows,columns,i)
-                imshow(images{i},'Border','tight')
+                imshow(imresize(images{i},.1),'Border','tight')
                 title(proplist(i))
             end
             varargout{1}=h;

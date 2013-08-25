@@ -1,18 +1,22 @@
 classdef AbsorptionImageObject < ImageObject
-%ABSORPTIONIMAGEOBJECT 
+%ABSORPTIONIMAGEOBJECT is an image class that implements ImageObject.
+%Contains data selection routines, 
 
    properties (SetAccess = immutable)
        filename %string containing filename
        path %string containing the path
-       imagingDetuning %detuning from resonance in imaging light (MHz)
-       SCATTERING_XS %resonant xs corrected for imaging detuning
-       MAGNIFICATION %magnification in the optical train
-   end
+   end       
    properties(SetAccess = protected) 
-        regionOfInterest %struct containing vectors of x and y pixels ('.x' and '.y')
+        roiMask %imrect or imellipse object
         opticalDensity %array containing optical densities at each pixel
-        thumbnail %.1 scale image stored in RAM
+%         thumbnail %.1 scale image stored in RAM
         variables = {}; %cell array contaning names of variables imported from Cicero
+        imagingDetuning %detuning from resonance in imaging light (MHz)
+        generalizedXS %resonant xs corrected for imaging detuning
+        magnification %magnification in the optical train   
+        nC %discrete summation of optical density
+        xProjection %
+        yProjection %
    end
    properties (Dependent, SetAccess = protected)
         xCoordinates %x coordinates of the region of interest
@@ -22,7 +26,12 @@ classdef AbsorptionImageObject < ImageObject
         darkField %dark field image; 1392*1040 pixels (greyscale 1-4095)
         normalizedImage %(atoms-dark field)/(light-dark field) image;
    end
+   properties(Hidden, Access = protected)
+       lastroiPos
+   end
    methods
+       
+       %Constructor
        function obj = AbsorptionImageObject(varargin) %constructor for AbsorptionImageObjects
            
            %Define expected inputs
@@ -30,7 +39,7 @@ classdef AbsorptionImageObject < ImageObject
            p.CaseSensitive = false;
            addOptional(p,'file','');
            addOptional(p,'magnification',.25,@isnumeric);
-           addOptional(p,'resetROI',true,@islogical);
+           addOptional(p,'resetroi',true,@islogical);
            addOptional(p,'objAlreadyExists',false,@islogical);
            addOptional(p,'keepImageData',false,@islogical);
            addOptional(p,'imagingDetuning',0,@isnumeric);
@@ -39,59 +48,47 @@ classdef AbsorptionImageObject < ImageObject
            parse(p,varargin{:});
            magnification=p.Results.magnification;
            file = p.Results.file;
-           resetROI=p.Results.resetROI;
+           resetroi=p.Results.resetroi;
            objAlreadyExists=p.Results.objAlreadyExists;
            keepImageData = p.Results.keepImageData;
            imagingDetuning = p.Results.imagingDetuning;                     
            delete(p)
            
-           %avoid reprocessing data if it exists in memory
+           %check for flag from subclass constructor
            if ~objAlreadyExists
-               if strcmp(file,'')
-                   [obj.filename, obj.path]=AbsorptionImageObject.selectFile();
+               [filename,path]=AbsorptionImageObject.checkForFilename(file);
+               %avoid reprocessing data if it exists in memory
+               if ~AbsorptionImageObject.objExists(filename)
+                    obj.filename = filename;
+                    obj.path = path;
+                    obj.imagingDetuning=imagingDetuning;
+                    obj.magnification=magnification;                                 
+                    loadFromFile(obj,[obj.path obj.filename],keepImageData,resetroi);
                else
-                   [dir, name, ext] = fileparts(file);
-                   if strcmpi(ext,'.aia')
-                        if strcmp(dir,'')
-                            obj.path=pwd;
-                        else
-                            obj.path=[dir '\'];
-                        end
-                        obj.filename=[name ext];                    
-                   else
-                        error('File is not a .aia');
-                   end
+                   %obj already exists, do nothing
                end
-               obj.imagingDetuning=imagingDetuning;
-               obj.MAGNIFICATION=magnification;
-               obj.SCATTERING_XS=obj.RESONANT_XS/(1+(2*imagingDetuning*10^6/obj.LINE_WIDTH)^2);               
-               loadFromFile(obj,[obj.path obj.filename],keepImageData,resetROI);
            else
                %obj already exists, do nothing
            end
                
        end
-       function h = show(obj, varargin) %displays whole normalized image
-           h = imagesc(obj.normalizedImage);
-       end
-       function adjustRegionOfInterest(obj) %allows the user to pick a new region of interest
-           obj.regionOfInterest = getRegionOfInterest(obj.normalizedImage);
-       end
-       function set.regionOfInterest(obj, val) %dispalys the image and a drawable rectangle to select region of interest 
-           if isempty(val)
-               val=getRegionOfInterest(obj.normalizedImage);
-           end
-           obj.regionOfInterest=val;
+              
+       %%Set methods. Error checking goes here
+       function set.roiMask(obj, val) %dispalys the image and a drawable rectangle to select region of interest 
+           obj.roiMask=val;
        end 
        function set.opticalDensity(obj,val) %sets the optical density based on raw image data
            obj.opticalDensity=val;
        end
-       function xCoordinates = get.xCoordinates(obj) %
-           xCoordinates=1:size(obj.opticalDensity,2);
+       function set.nC(obj,val)
+           if val>=0
+                obj.nC = val;
+           else
+               error('nC is negative!')
+           end
        end
-       function yCoordinates = get.yCoordinates(obj) %
-           yCoordinates=1:size(obj.opticalDensity,1);
-       end
+       
+       %%Get methods for dependent properties
        function atoms = get.atoms(obj) %
            if isprop(obj,'imageData')
                atoms=obj.imageData{1}{2};
@@ -117,19 +114,55 @@ classdef AbsorptionImageObject < ImageObject
            end
        end
        function normalizedImage = get.normalizedImage(obj) %
-           atoms=obj.atoms;
-           darkField=obj.darkField;
-           light=obj.light;
-           atoms=atoms-darkField;
-           light=light-darkField;
-           scaling=mean(mean(atoms(10:90,450:750)))/mean(mean(light(10:90,450:750)));
-           %%scaling=1;
-           light(light==0)=Inf;
-           normalizedImage = atoms./(scaling*light);
-           normalizedImage(normalizedImage<=0)=1;
+           normalizedImage = obj.calculateNormalizedImage();
+       end
+       function xCoordinates = get.xCoordinates(obj) %
+           xCoordinates=1:size(obj.opticalDensity,2);
+       end
+       function yCoordinates = get.yCoordinates(obj) %
+           yCoordinates=1:size(obj.opticalDensity,1);
+       end
+       
+       %%UI routines/methods
+       function h = show(obj, varargin) %displays whole normalized image
+           h = imagesc(obj.normalizedImage);
+       end
+       function adjustroi(obj) %allows the user to pick a new region of interest
+           obj.initializeroi();
+           obj.initializeValues();
+       end
+       function [roiPos,roiMask] = roiPrompt(obj)
+           global roi_global
+           global roiMask_global
+           
+           f = figure('name','Select Analysis Range and Press Any Key','NumberTitle','off',...
+                        'WindowStyle','modal');
+           im = imshow(obj.normalizedImage,'Border','tight','InitialMagnification',55);
+                      
+           if isempty(obj.lastroiPos)
+               if isempty(roi_global)
+                   roi = imellipse(gca);
+               else
+                   roi = imellipse(gca,roi_global);
+               end
+           else
+               roi = imellipse(gca,obj.lastroiPos);
+           end
+   
+           fcn = makeConstrainToRectFcn('imellipse',get(gca,'XLim'),get(gca,'YLim'));
+           setPositionConstraintFcn(roi,fcn);          
+           pause                      
+           roiMask = roi.createMask();
+           roiPos = roi.getPosition();
+           roi_global = roi.getPosition();
+           roiMask_global = roi.createMask();
+           close(gcf)
        end
    end
+   
    methods (Access = protected)
+       
+       %%Object initialization routines
        function loadFromFile(obj,filename,keepImageData,resetROI) %routine which initializes the properties of the object
            p = addprop(obj,'imageData');    %adds a temporary field that conatins raw image data
            obj.imageData = ImageObject.readAIA(filename);   %get image data from file           
@@ -137,25 +170,80 @@ classdef AbsorptionImageObject < ImageObject
                for i=4:length(obj.imageData)
                    propMeta = addprop(obj,obj.imageData{i}{1});
                    obj.variables {length(obj.variables)+1} = obj.imageData{i}{1};
-                   obj.(obj.imageData{i}{1})=obj.imageData{i}{2};
-                   %propMeta.SetAccess='protected';                   
+                   obj.(obj.imageData{i}{1})=obj.imageData{i}{2};                
                end
            end
-           normalizedImage = obj.normalizedImage;   %calculate the normalized image
-           obj.thumbnail=imresize(normalizedImage,.1);
-           obj.opticalDensity = -log(normalizedImage);%calculate and store optical density
-           if resetROI
-                obj.regionOfInterest = getRegionOfInterest(normalizedImage); %set the region of interest
-           else
-               global regionOfInterest_global
-               obj.regionOfInterest = regionOfInterest_global;
-           end
+           normalizedImage = obj.normalizedImage;   %get and temporarily store the normalized image
+%            obj.thumbnail=imresize(normalizedImage,.1); %create and store a thumbnail
+
+           obj.initializeroi(resetROI)
+           obj.initializeValues();
            if ~keepImageData
                 delete(p); %get rid of the temporary imageData field
            end
        end
+       function initializeroi(obj,varargin)
+           global roi_global
+           global roiMask_global
+           
+           if nargin==1
+               [obj.lastroiPos,obj.roiMask] = obj.roiPrompt();
+           elseif varargin{1}
+               [obj.lastroiPos,obj.roiMask] = obj.roiPrompt();
+           else
+               if ~isempty(obj.roiMask)
+                   %doNothing
+               elseif ~isempty(roiMask_global)
+                   obj.roiMask = roiMask_global;
+               else
+                   [obj.lastroiPos,obj.roiMask] = obj.roiPrompt();
+               end
+           end           
+       end
+       function initializeValues(obj)
+           obj.generalizedXS=obj.calculategeneralizedXS();
+           obj.opticalDensity = obj.calculateopticalDensity();
+           obj.xProjection = obj.calculatexProjection();
+           obj.yProjection = obj.calculateyProjection();
+           obj.nC = obj.calculatenC();           
+       end
+       
+       %%Calculation methods. Any science goes here.
+       function nC = calculatenC(obj)
+           opticalDensity = obj.opticalDensity;
+           nC = (obj.PIXEL_SIZE/obj.magnification)^2/obj.generalizedXS*...
+                sum(sum(opticalDensity.*obj.roiMask));
+       end
+       function normalizedImage = calculateNormalizedImage(obj)
+           atoms=obj.atoms;
+           darkField=obj.darkField;
+           light=obj.light;
+           atoms=atoms-darkField;
+           light=light-darkField;
+           scaling=mean(mean(atoms(900:1000,600:800)))/mean(mean(light(900:1000,600:800)));
+           %%scaling=1;
+           light(light==0)=Inf;
+           normalizedImage = atoms./(scaling*light);
+           normalizedImage(normalizedImage<=0)=1;
+       end
+       function xProjection = calculatexProjection(obj)
+           xProjection = sum(obj.opticalDensity.*obj.roiMask,1);
+       end
+       function yProjection = calculateyProjection(obj)
+           yProjection = sum(obj.opticalDensity.*obj.roiMask,2)';
+       end
+       function generalizedXS = calculategeneralizedXS(obj)
+           generalizedXS = obj.RESONANT_XS/(1+(2*obj.imagingDetuning*10^6/obj.LINE_WIDTH)^2);
+       end
+       function opticalDensity = calculateopticalDensity(obj)
+           opticalDensity = -log(obj.normalizedImage);%calculate and store optical density
+       end
    end
    methods (Static=true)
+       
+       %%Class utility methods
        objList = findall()
+       tf = objExists(filename)
+       [filename, path] = checkForFilename(file)
    end
 end

@@ -24,19 +24,16 @@ function GUI_TEST()
         gui.imList = uicontrol('Style','listbox','Parent',leftPane,'Max',2,'Min',0,'Callback',@imListCallback);
         gui.seriesButton = uicontrol('Style','pushbutton','String','Create Series','Parent',leftPane);
         leftPane.Sizes = [24 -1 24];
-        viewPane = uiextras.TabPanel('Parent',rightPane);
-        gui.defaultAxes = axes('Parent',viewPane);
-        gui.nextAxes = axes('Parent',viewPane);
-        
+        gui.viewPane = uiextras.TabPanel('Parent',rightPane);
+        gui.tab1 = uiextras.Panel('Parent',gui.viewPane,'Title','Current Image');
     end
     function updateGUI()
         set(gui.pathBox,'String',handles.dir)
         set(gui.imList,'String',handles.imList);
     end
-    function displayImage(imName)
-        image = CloudImageObject('file',imName{:});
-        set(gui.mainWindow,'CurrentAxes',gui.defaultAxes)
-        image.show()
+    function drawCurrentImage(imName)
+        image = CloudImageObject('file',imName{:},'resetROI',false);      
+        image.uishow(gcf,gui.tab1)
     end
     %%Callback subfunctions
     function updateDir(varargin)
@@ -53,7 +50,7 @@ function GUI_TEST()
         list = {storageList(x).name}';
     end
     function imListCallback(varargin)       
-        displayImage(strcat(handles.dir, '\', handles.imList(get(gui.imList,'value'))));
+        drawCurrentImage(strcat(handles.dir, '\', handles.imList(get(gui.imList,'value'))));
     end
         
     function onExit()

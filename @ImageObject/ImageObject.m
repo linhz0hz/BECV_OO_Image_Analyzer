@@ -16,17 +16,18 @@ classdef (Abstract) ImageObject  < dynamicprops
     end 
     properties (Hidden, Access=protected)
         timestamp = now
+        lastroiPosition %last known local roi position, if any
     end
     properties (SetAccess = immutable, Abstract = true)
-        imagingDetuning %detuning from resonance in imaging light (MHz)
-        MAGNIFICATION %optical magnification
         filename %string containing filename
         path %string containing the path
     end
     properties(SetAccess = protected, Abstract = true)
-        regionOfInterest %struct containing vectors of x and y pixels ('.x' and '.y')
-        variables
-        thumbnail %.1 scale image stored in RAM
+        imagingDetuning %detuning from resonance in imaging light (MHz)
+        magnification %optical magnification
+        roiMask %binary roi mask tme same size as the image
+        variables % cell array containing the names of variables imported from Cicero
+%         thumbnail % .1 scale image stored in RAM
     end
     properties (Dependent, SetAccess = protected, Abstract=true)
         xCoordinates %vector of the image's horizontal coordinates
