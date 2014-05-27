@@ -13,10 +13,12 @@ classdef (Abstract) ImageObject  < dynamicprops
         CAMERA_GAIN = 13.3; %camera gain
         PIXEL_SIZE = 6.45*10^(-6); %unmagnified camera pixel size in meters
         LINE_WIDTH = 5.9e6; %natural linewidth in Hz
+        BOHR_MAGNETON = 9.274e-14; %Bohr magneton in SI
+        PLANCK_CONSTANT = 6.626e-34; %Planck's Constant
+        HBAR = 6.626e-34/(2*pi); %hbar
     end 
     properties (Hidden, Access=protected)
         timestamp = now
-        lastroiPosition %last known local roi position, if any
     end
     properties (SetAccess = immutable, Abstract = true)
         filename %string containing filename
@@ -25,7 +27,7 @@ classdef (Abstract) ImageObject  < dynamicprops
     properties(SetAccess = protected, Abstract = true)
         imagingDetuning %detuning from resonance in imaging light (MHz)
         magnification %optical magnification
-        roiMask %binary roi mask tme same size as the image
+        roi %binary roi mask tme same size as the image
         variables % cell array containing the names of variables imported from Cicero
 %         thumbnail % .1 scale image stored in RAM
     end
@@ -51,5 +53,7 @@ classdef (Abstract) ImageObject  < dynamicprops
     methods (Access = protected, Static = true)
          [filename, filepath] = selectFile(varargin) %UI to select a file
          imageData = readAIA(filename) %extracts images and properties from AIA files
+         imageData = readArrays(atoms,noAtoms,darkField,ciceroNames,ciceroValues)
+         result = parseMath(inputString)
     end
 end

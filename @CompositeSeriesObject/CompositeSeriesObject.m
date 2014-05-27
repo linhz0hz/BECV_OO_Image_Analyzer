@@ -60,8 +60,14 @@ methods
          obj.seriesHandles = obj.seriesHandles(sortIndex);
         
     end
-    function varargout =  parameterizedPlot(obj,xProp,yProp)
-        h=figure;
+    function varargout =  parameterizedPlot(obj,xProp,yProp,varargin)
+        
+        if nargin>3
+            parentAxes = varargin{1};
+        else
+            h=figure;
+            parentAxes = axes('Parent',h);
+        end
         hold on
         
         colors={...
@@ -91,7 +97,7 @@ methods
         end
         legHandle = legend(leg);
         set(get(legHandle, 'title'),'string',obj.sortParameter);
-        varargout{1}=h;
+        varargout{1}=parentAxes;
     end
 end
 end

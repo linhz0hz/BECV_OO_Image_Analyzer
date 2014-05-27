@@ -41,9 +41,9 @@ methods
 %             
 %             for i=1:length(obj.imageHandles)
 %                 xWidth(i)=obj.imageHandles{i}.xWidth...
-%                     *obj.imageHandles{i}.PIXEL_SIZE/obj.imageHandles{i}.MAGNIFICATION;
+%                     *obj.imageHandles{i}.PIXEL_SIZE/obj.imageHandles{i}.magnification;
 %                 yWidth(i)=obj.imageHandles{i}.yWidth...
-%                     *obj.imageHandles{i}.PIXEL_SIZE/obj.imageHandles{i}.MAGNIFICATION;
+%                     *obj.imageHandles{i}.PIXEL_SIZE/obj.imageHandles{i}.magnification;
 %                 time(i)=(obj.imageHandles{i}.TOF+obj.toffset)*10^-3;                                
 %             end
 %             
@@ -62,7 +62,7 @@ methods
             
                 for i=1:length(obj.imageHandles)
                     xWidth(i)=obj.imageHandles{i}.xWidth...
-                        *obj.imageHandles{i}.PIXEL_SIZE/obj.imageHandles{i}.MAGNIFICATION;
+                       *obj.imageHandles{i}.PIXEL_SIZE/obj.imageHandles{i}.magnification;
                     time(i)=(obj.imageHandles{i}.TOF+obj.toffset)*10^-3;                                
                 end
             
@@ -81,7 +81,8 @@ methods
             
                 for i=1:length(obj.imageHandles)
                     yWidth(i)=obj.imageHandles{i}.yWidth...
-                        *obj.imageHandles{i}.PIXEL_SIZE/obj.imageHandles{i}.MAGNIFICATION;
+                       *obj.imageHandles{i}.PIXEL_SIZE/obj.imageHandles{i}.magnification;
+                        
                     time(i)=(obj.imageHandles{i}.TOF+obj.toffset)*10^-3;                                
                 end
             

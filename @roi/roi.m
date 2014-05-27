@@ -5,7 +5,7 @@ classdef roi < handle
 %%parentAxes on which to draw the roi.
     properties (SetAccess = protected)
         type
-        pos
+        pos=[];
         mask
     end
     
@@ -19,9 +19,7 @@ classdef roi < handle
                 obj.updateWithImage(image)
             else
                 obj.updateWithAxes(parentAxes)
-            end
-            
-            
+            end   
         end        
     end
     methods (Access = protected)
@@ -29,10 +27,10 @@ classdef roi < handle
             p = inputParser;
             p.CaseSensitive = false;
             p.KeepUnmatched = true;
-            defaultType = 'imellipse';
+            defaultType = 'imrect';
             expectedType = {'imellipse','imrect'};
             addOptional(p,'type',defaultType,@(x) any(validatestring(x,expectedType)));
-            addOptional(p,'initialPosition',[]);
+            addOptional(p,'initialPosition',obj.pos);
             addOptional(p,'parentAxes',[]);
             addOptional(p,'image',[]);
             
@@ -49,10 +47,12 @@ classdef roi < handle
             end
         end
         function roihandle = draw(obj,axeshandle)
-            roihandle = feval(obj.type,axeshandle);
             if ~isempty(obj.pos)
-                set(roihandle,'Position',obj.pos);
+                roihandle = feval(obj.type,axeshandle,obj.pos);
+            else
+                roihandle = feval(obj.type,axeshandle);
             end
+            
             fcn = makeConstrainToRectFcn(obj.type,get(gca,'XLim'),get(gca,'YLim'));
             setPositionConstraintFcn(roihandle,fcn);            
         end
