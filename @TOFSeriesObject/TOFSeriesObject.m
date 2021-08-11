@@ -97,11 +97,11 @@ methods
     end
     function xTemperature = get.xTemperature(obj)
         xTemperature=obj.xWidthFit.Coefficients{2,1}*...
-                obj.imageHandles{1}.MASS/obj.imageHandles{1}.BOLTZMANN_CONSTANT*10^3;
+                obj.imageHandles{1}.MASS/obj.imageHandles{1}.BOLTZMANN_CONSTANT*10^6;
     end
     function yTemperature = get.yTemperature(obj)
         yTemperature=obj.yWidthFit.Coefficients{2,1}*...
-                obj.imageHandles{1}.MASS/obj.imageHandles{1}.BOLTZMANN_CONSTANT*10^3;
+                obj.imageHandles{1}.MASS/obj.imageHandles{1}.BOLTZMANN_CONSTANT*10^6;
     end
     function xTemperatureError = get.xTemperatureError(obj)
         xTemperatureError=obj.xWidthFit.Coefficients{2,2}*...

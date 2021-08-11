@@ -142,7 +142,7 @@ function GUI_TEST()
     end
     function imListCallback(varargin)
         handles.selectedImages =  handles.imList(get(gui.imList,'value'));
-        handles.currentImage = CloudImageObject('file',strcat(handles.dir,handles.selectedImages{1}),'roi',handles.lastroi);
+        handles.currentImage = CloudImage('source','file','image',strcat(handles.dir,handles.selectedImages{1}),'roi',handles.lastroi);
         drawOD();
         set(gui.tab1,'Title',handles.currentImage.filename);
         set(gui.tab2,'Title',handles.currentImage.filename);

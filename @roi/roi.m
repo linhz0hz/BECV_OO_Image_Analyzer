@@ -8,6 +8,10 @@ classdef roi < handle
         pos=[];
         mask
     end
+    properties (Dependent)
+        xvec
+        yvec
+    end
     
     methods
         function obj = roi(varargin)
@@ -19,15 +23,27 @@ classdef roi < handle
                 obj.updateWithImage(image)
             else
                 obj.updateWithAxes(parentAxes)
-            end   
+            end
         end        
+    end
+    methods
+        function xvec=get.xvec(obj)
+            x1 = round(obj.pos(1));
+            x2 = x1 + round(obj.pos(3));
+            xvec = x1:x2;
+        end
+        function yvec=get.yvec(obj)
+            y1 = round(obj.pos(2));
+            y2 = y1 + round(obj.pos(4));
+            yvec = y1:y2;
+        end
     end
     methods (Access = protected)
         function [image,parentAxes] = parseInputs(obj,varargin)
             p = inputParser;
             p.CaseSensitive = false;
             p.KeepUnmatched = true;
-            defaultType = 'imrect';
+            defaultType = 'imrect'; %'imrect';
             expectedType = {'imellipse','imrect'};
             addOptional(p,'type',defaultType,@(x) any(validatestring(x,expectedType)));
             addOptional(p,'initialPosition',obj.pos);
@@ -66,10 +82,14 @@ classdef roi < handle
         function updateWithImage(obj,image)
             f = figure('name','Select Analysis Range and Press Any Key','NumberTitle','off',...
                 'WindowStyle','modal');
-            im = imshow(image,'Border','tight','InitialMagnification',55);
+%             im = imshow(image,[],'Border','tight','InitialMagnification',55*512/size(image,2));
+            im = imshow(image,'Border','tight','InitialMagnification',55*512/size(image,2));
             axeshandle = get(im,'Parent');
             roihandle = obj.draw(axeshandle);
-            pause
+            flag=0; 
+            while flag==0
+                flag=waitforbuttonpress;
+            end
             obj.pos = getPosition(roihandle);
             obj.mask = roihandle.createMask();
             close(f)

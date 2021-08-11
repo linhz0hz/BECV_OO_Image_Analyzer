@@ -1,0 +1,353 @@
+classdef FringeCorrector < handle
+    
+    properties (GetAccess = public, SetAccess = public)
+        number % number of images in the PCA basis
+        width % width of the images
+        height % height of the images
+    end
+    properties (Hidden = true, Access = public)
+        rawImages % stores the images in memory, if constructed from rawImages
+        imageObjects = {} % stores the images, if not constructed from rawImages
+    end
+    properties (Access = public)
+        coefficients % the PCA coefficients (coef(i,:) are the coeffecients for the ith basisImage and basisImages == coef * rawImages)
+        meanImage % the mean PCA image
+        basisImages % the PCA basis
+    end
+    properties (Access = public)
+        basisID = 0
+        imageIDs = []
+        cameraID = 0
+        source;
+    end
+    
+   
+    methods (Access = public)
+        
+        % constructor
+        function obj = FringeCorrector(par,src)
+          
+            if nargin < 2
+                obj.source = 'DBBasisID';
+            else
+                obj.source = src;
+            end
+            
+            if strcmp(obj.source,'DBBasisID') 
+                if nargin == 0 
+                    [obj.imageIDs,obj.basisID] = FringeCorrector.readFromDB();
+                else
+                    [obj.imageIDs,obj.basisID] = FringeCorrector.readFromDB(par);
+                end
+            end
+            
+            if strcmp(obj.source,'DBImageIDs')
+                if length(par) == 1
+                    obj.imageIDs = FringeCorrector.findLargestImageIDs(par);
+                else
+                    obj.imageIDs = unique(par);
+                end
+            end
+            
+            if strcmp(obj.source,'DBBasisID') || strcmp(obj.source,'DBImageIDs')
+                obj.number = length(obj.imageIDs)-1;
+            end
+            
+            
+            if strcmp(obj.source,'imageObjects')
+                obj.imageObjects = par;
+                obj.number = length(obj.imageObjects)-1;
+                [exist,IDs] = obj.checkImageObjectsForImageIDs();
+                if exist
+                    obj.imageIDs = IDs;
+                    obj.imageObjects = {};
+                    obj.source = 'DBImageIDs';
+                end
+            end
+                
+            
+            if strcmp(obj.source,'DBBasisID') || strcmp(obj.source,'DBImageIDs')
+                
+                obj.loadFromDB();
+                
+            end
+            
+            if strcmp(obj.source,'imageObjects')
+                
+                obj.loadFromImageObjects();
+                
+            end
+             
+            if strcmp(obj.source,'rawImages')
+                [obj.number,obj.height,obj.width] = size(par);
+                obj.number = obj.number - 1; % the PCA basis contains one element less
+                obj.rawImages = par(:,:);
+            end
+            
+            obj.computeBasis();
+            
+            if ~strcmp(obj.source,'rawImages')
+                obj.rawImages = [];
+            end
+            
+        end
+        
+        function images = getImages(obj)
+            images = zeros(obj.number+1,obj.height,obj.width);
+            switch obj.source
+                case 'rawImages'
+                    images(:,:) = obj.rawImages;
+                case {'DBBasisID','DBImageIDs','imageObjects'} 
+                    for i = 1:obj.number+1
+                        images(i,:,:) = obj.getImage(i);
+                    end
+            end
+        end
+        function image  = getImage(obj,i)
+            image = zeros(obj.height,obj.width);
+            switch obj.source
+                case 'rawImages'
+                    image(:) = obj.rawImages(i,:);
+                case {'DBBasisID','DBImageIDs'} 
+                    [light,darkfield,~,~] = FringeCorrector.readLightImageFromDB(obj.imageIDs(i));
+                    image = light - darkfield;
+                case 'imageObjects'
+                    light = obj.imageObjects{i}.light;
+                    darkfield = obj.imageObjects{i}.darkField;
+                    image = light - darkfield;                    
+            end
+        end
+        function images = getBasisImages(obj)
+            images = zeros(obj.number,obj.height,obj.width);
+            images(:,:) = obj.basisImages;
+        end
+        function image  = getBasisImage(obj,i)
+            image = zeros(obj.height,obj.width);
+            image(:) = obj.basisImages(i,:);
+        end   
+        function coefs  = getCoefficients(obj)
+            coefs = obj.coefficients;
+        end
+        function coef   = getCoefficient(obj,i)
+            coef = obj.coefficients(i,:);
+        end
+        function image  = getMeanImage(obj)
+            image = zeros(obj.height,obj.width);
+            image(:) = obj.meanImage;
+        end
+        
+        function lightImage = makeCorrectedImage(obj,atomsImage,ROI)
+            nargin
+            atomsImage = double(atomsImage);
+            lightImage = zeros(obj.height,obj.width); % initilize variable
+            lightImage(:) = obj.meanImage' + obj.basisImages'*(obj.basisImages*(atomsImage(:)-obj.meanImage')); % project into PCA subspace
+            %ROI = roi('image',atomsImage); % query roi
+            lightImage = (atomsImage(:)'*(~ROI.mask(:))) / (lightImage(:)'*(~ROI.mask(:))) * lightImage; % scale image
+        end
+        function lightImage = makeCorrectedImage2(obj,atomsImage,ROI)
+            nargin
+        end
+        function overlap = calculateOverlap(obj,lightImage)
+            A = (lightImage(:)-obj.meanImage'); % center around mean
+            A = A / sqrt(A'*A); % normalize
+            overlap = (A'*obj.basisImages')*(obj.basisImages*A); % calculate overlap with PCA subspace
+        end
+        
+        function basisID = saveToDB(obj)
+            
+            switch obj.source
+                case 'DBImageIDs'
+                    basisID = FringeCorrector.writeToDB(obj.imageIDs);
+                case 'DBBasisID'
+                    basisID = obj.basisID;
+                otherwise
+                    basisID = 0;
+            end
+                
+        end
+        
+    end
+    
+    methods (Access = public)
+        
+        function computeBasis(obj)
+            % the obj.initialize() function calculates the PCA basis and
+            % stores it to local variables
+            
+            disp('Compute the PCA basis set...');
+            
+            tic
+            
+            obj.meanImage = mean(obj.rawImages); % calculate mean image
+            [basis,coef,~] = princomp(obj.rawImages,'econ'); % principle component analysis
+            obj.basisImages = basis'; % save the PCA basis
+            obj.coefficients = [inv(coef(1:end-1,:)) zeros(obj.number,1)]; % save the coefficients
+        
+            toc
+            
+            disp(' ');
+            
+        end
+        
+        function loadFromDB(obj)
+            
+            disp('Loading images from database...');
+            
+            tic
+            
+            for i = 1:obj.number+1
+                [light,darkfield,imageWidth,imageHeight,camID] = FringeCorrector.readLightImageFromDB(obj.imageIDs(i));
+                if i == 1
+                    obj.width = imageWidth;
+                    obj.height = imageHeight;
+                    obj.rawImages = zeros(obj.number+1,obj.width*obj.height);
+                    obj.cameraID = camID;
+                else
+                    if obj.cameraID ~= camID
+                       disp('The images have different sizes and cannot be from the same camera!');
+                    end
+                end
+                obj.rawImages(i,:) = light(:) - darkfield(:);
+            end   
+            
+            toc
+            
+            disp(' ');
+            
+        end
+        
+        function loadFromImageObjects(obj)
+                
+            disp('Loading images from Image objects...');
+            
+            tic
+            
+            for i = 1:obj.number+1
+                light = obj.imageObjects{i}.light;
+                darkfield = obj.imageObjects{i}.darkField;
+                imageWidth = length(obj.imageObjects{i}.xCoordinates);
+                imageHeight = length(obj.imageObjects{i}.yCoordinates);
+                if i == 1
+                    obj.width = imageWidth;
+                    obj.height = imageHeight;
+                    obj.rawImages = zeros(obj.number+1,obj.width*obj.height);
+                else
+                    if obj.width ~= imageWidth || obj.height ~= imageHeight
+                        disp('The images have different sizes and cannot be from the same camera!');
+                    end
+                end
+                obj.rawImages(i,:) = light(:) - darkfield(:);
+            end     
+            
+            toc
+            
+            disp(' ');
+            
+        end
+         
+        function [exist,IDs] = checkImageObjectsForImageIDs(obj)
+            IDs = zeros(obj.number+1,1);
+            for i = 1:obj.number+1
+                if isprop(obj.imageObjects{i},'imageID')
+                    IDs(i) = obj.imageObjects{i}.imageID;
+                else
+                    IDs(i) = -1;
+                end
+            end
+            exist = ~any(IDs==-1);
+        end
+        
+    end
+    
+    methods (Static = true, Access = public)
+        
+        function [imageIDs,basisID] = readFromDB(basisID)
+            
+            if nargin == 0 % if no basisID is specified it defaults to the largest basisID in the database
+                basisID = FringeCorrector.findLargestBasisID();
+            end
+            
+            connection = database('BECVDatabase','root','w0lfg4ng','Vendor','MySQL','Server','192.168.1.227');
+            curser = exec(connection,['SELECT * FROM pca WHERE basisID = ', int2str(basisID)]);
+            curser = fetch(curser);
+            data = curser.Data;
+            %close(connection);
+            
+            if length(data) == 1 % checks if basisID is not found
+                imageIDs = [];
+            else
+                imageIDcolumn = 3;
+                imageIDs = unique([data{:,imageIDcolumn}]);
+            end
+            
+        end
+        
+        function basisID = writeToDB(imageIDs)
+            
+            basisID = FringeCorrector.findLargestBasisID() + 1;
+            
+            connection = database('BECVDatabase','root','w0lfg4ng','Vendor','MySQL','Server','192.168.1.227');
+            for i = imageIDs
+                exec(connection,['INSERT INTO pca (basisID,imageID_fk) VALUES (',int2str(basisID),',',int2str(i),')']);
+            end
+            %close(connection); 
+            
+        end
+        
+        function basisID = findLargestBasisID()
+            
+            connection = database('BECVDatabase','root','w0lfg4ng','Vendor','MySQL','Server','192.168.1.227');
+            curser = exec(connection,'SELECT basisID FROM pca ORDER BY basisID DESC LIMIT 1');
+            curser = fetch(curser);
+            data = curser.Data;
+            %close(connection);
+            
+            basisID = data{1};
+            
+        end
+        
+        function [light,darkfield,imageWidth,imageHeight, cameraID] = readLightImageFromDB(imageID)
+            
+            connection = database('BECVDatabase','root','w0lfg4ng','Vendor','MySQL','Server','192.168.1.227');
+            
+            sqlQuery = ['SELECT noAtoms,dark,cameraID_fk FROM images WHERE imageID = ',num2str(imageID)];
+            curs = exec(connection,sqlQuery);
+            curs = fetch(curs);
+            data = curs.Data;
+            light = typecast(data{1},'int16');
+            darkfield = typecast(data{2},'int16');
+            cameraID = data{3};
+            
+            sqlQuery = ['SELECT cameraWidth,cameraHeight FROM cameras WHERE cameraID = ',num2str(cameraID)];
+            curs = exec(connection,sqlQuery);
+            curs = fetch(curs);
+            data = curs.Data;
+            imageWidth = data{1};
+            imageHeight = data{2};
+            
+            %close(connection);
+            
+            light = reshape(light,[imageHeight imageWidth])';
+            darkfield = reshape(darkfield,[imageHeight imageWidth])';
+            
+        end
+            
+        function imageIDs = findLargestImageIDs(N)
+            
+            if nargin == 0
+                N = 1;
+            end
+            
+            connection = database('BECVDatabase','root','w0lfg4ng','Vendor','MySQL','Server','192.168.1.227');
+            curser = exec(connection,['SELECT imageID FROM images ORDER BY imageID DESC LIMIT ',int2str(N)]);
+            curser = fetch(curser);
+            data = curser.Data;
+            %close(connection);
+            
+            imageIDs = [data{:}]';
+            
+        end
+        
+    end
+    
+end

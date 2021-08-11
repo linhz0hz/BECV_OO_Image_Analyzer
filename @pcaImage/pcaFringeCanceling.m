@@ -1,0 +1,2 @@
+classdef pcaFringeCanceling < handle
+end

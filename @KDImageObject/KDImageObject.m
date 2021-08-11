@@ -20,7 +20,7 @@ classdef KDImageObject < CloudImageObject
             oldroi = obj.roi;
             obj.roi=roi2;
             obj.nC = obj.calculatenC();
-            transferRatio = obj.nC/peaknC;
+            transferRatio = 2*obj.nC/(peaknC+2*obj.nC);
             obj.roi = oldroi;
             obj.nC = obj.calculatenC();
         end

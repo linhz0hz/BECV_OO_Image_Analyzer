@@ -16,13 +16,14 @@ classdef ImageSeriesObject < dynamicprops
            p.CaseSensitive = false;
            p.KeepUnmatched = true;
            defaultImageClass = 'CloudImageObject';
-           expectedImageClass = {'AbsorptionImageObject','CloudImageObject','BECImageObject'};
+           expectedImageClass = {'AbsorptionImageObject','CloudImageObject','BECImageObject','SFPeaksImage'};
            addOptional(p,'imageclass',defaultImageClass,@(x) any(validatestring(x,expectedImageClass)));
            addOptional(p,'files','');
-           addOptional(p,'magnification',2,@isnumeric);
+           addOptional(p,'magnification',10,@isnumeric);
            addOptional(p,'shots',0);
            addOptional(p,'roi',[]);
            addOptional(p,'imagingDetuning',0);
+           addOptional(p,'fringeCanceling',false,@islogical); %Added by Niki
            parse(p,varargin{:});
            obj.IMAGECLASS = p.Results.imageclass;
            magnification = p.Results.magnification;
@@ -30,23 +31,24 @@ classdef ImageSeriesObject < dynamicprops
            shots = p.Results.shots;
            obj.imageroi = p.Results.roi;
            imagingDetuning = p.Results.imagingDetuning;
+           fringeCanceling = p.Results.fringeCanceling; % added by Niki
            delete(p);
 
            if isempty(files)
                recent = shots;
                if recent > 0
-                   storageList = dir(['Z:\' '*.aia']);
+                   storageList = dir([pwd '\*.aia']);
                    [~,x]=sort([storageList(:).datenum],'ascend');
                    fileParty = {storageList(x).name}';
                    sizeFP = size(fileParty);
                    sizeFP = sizeFP(1);
                    for i = (1+sizeFP-recent):1:sizeFP
                         filenames{i-sizeFP+recent} = fileParty{i};
-                        path = 'Z:\';
+                        path = [pwd '\'];
                    end
                path = char(path);
                else
-               [filenames, path] = ImageSeriesObject.selectFiles('Z:\');
+               [filenames, path] = ImageSeriesObject.selectFiles([pwd '\']);
                filenames = strcat(path,filenames);
                end
            else
@@ -55,10 +57,27 @@ classdef ImageSeriesObject < dynamicprops
 
            for i = 1:length(filenames)
                if i == 1
+                   
                    if strcmp(obj.IMAGECLASS,'CloudImageObject')
-                        tempObj = CloudImageObject('magnification',magnification,'file',[filenames{i}],'imagingDetuning',imagingDetuning,'roi',obj.imageroi);
+                        tempObj = CloudImageObject(...
+                            'magnification',magnification,...
+                            'file',[filenames{i}],...
+                            'imagingDetuning',imagingDetuning,...
+                            'roi',obj.imageroi,...
+                            'fringeCanceling',fringeCanceling);
                    elseif strcmp(obj.IMAGECLASS,'BECImageObject')
-                        tempObj = BECImageObject('magnification',magnification,'file',[filenames{i}],'imagingDetuning',imagingDetuning,'roi',obj.imageroi);
+                        tempObj = BECImageObject(...
+                            'magnification',magnification,...
+                            'file',[filenames{i}],...
+                            'imagingDetuning',imagingDetuning,...
+                            'roi',obj.imageroi,...
+                            'fringeCanceling',fringeCanceling);
+                   elseif strcmp(obj.IMAGECLASS,'AbsorptionImageObject')
+                        tempObj = AbsorptionImageObject('magnification',magnification,...
+                            'file',[filenames{i}],...
+                            'imagingDetuning',imagingDetuning,...
+                            'roi',obj.imageroi,...
+                            'fringeCanceling',fringeCanceling);
                    end
                    obj.imageroi = tempObj.roi;
                    
@@ -81,6 +100,8 @@ classdef ImageSeriesObject < dynamicprops
                         tempObj=CloudImageObject('magnification',magnification,'file',[filenames{i}],'roi',obj.imageroi,'imagingDetuning',imagingDetuning);
                    elseif strcmp(obj.IMAGECLASS,'BECImageObject')
                         tempObj=BECImageObject('magnification',magnification,'file',[filenames{i}],'roi',obj.imageroi,'imagingDetuning',imagingDetuning);
+                   elseif strcmp(obj.IMAGECLASS,'AbsorptionImageObject')
+                        tempObj=AbsorptionImageObject('magnification',magnification,'file',[filenames{i}],'roi',obj.imageroi,'imagingDetuning',imagingDetuning);
                    end
                    [imVars,ind]= intersect(imVars,tempObj.variables);
                    vals=vals(ind);
@@ -433,8 +454,6 @@ classdef ImageSeriesObject < dynamicprops
             end
                 
         end
-        
-        
         function hlist = findImagesWithProp(obj,PropName,PropValue)
             hlist=[];
             for i=1:length(obj.imageHandles)
