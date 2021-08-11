@@ -1,0 +1,2 @@
+This folder (named OO) contain MATLAB code in object-oriented style for analyzing the images of cold atoms we retrieve from cameras. They are eventually called by a LabView UI and displayed live.
+
